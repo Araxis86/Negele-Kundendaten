@@ -4,6 +4,8 @@ import smtplib
 from email.message import EmailMessage
 import io
 import csv
+import base64
+import os
 
 app = Flask(__name__)
 
@@ -35,23 +37,27 @@ def submit():
 
     msg = EmailMessage()
     msg["Subject"] = f"Neue Kundendaten von {data['Vorname']} {data['Nachname']}"
-    msg["From"] = "formular@negele.com"
-    msg["To"] = data["Berater"]
-    msg.set_content("Im Anhang finden Sie die Kundendaten als CSV-Datei.")
+    msg["From"] = os.environ.get("SMTP_USER")
+    msg["To"] = data["Berater"] or "info@negele.com"
+    msg.set_content("Im Anhang finden Sie die Kundendaten als CSV-Datei und die Unterschrift.")
+
     msg.add_attachment(csv_buffer.getvalue(), filename="kundendaten.csv", subtype="csv", maintype="text")
-    import base64
+
     signature_data = request.form.get('signature_data')
     if signature_data:
         encoded_image = signature_data.split(",")[1]
         signature_bytes = base64.b64decode(encoded_image)
         msg.add_attachment(signature_bytes, maintype="image", subtype="png", filename="unterschrift.png")
 
+    smtp_server = os.environ.get("SMTP_SERVER", "smtp.web.de")
+    smtp_user = os.environ.get("SMTP_USER")
+    smtp_pass = os.environ.get("SMTP_PASSWORD")
 
-    with smtplib.SMTP_SSL("smtp.example.com", 465) as smtp:
-        smtp.login("formular@negele.com", "DEIN_PASSWORT")
+    with smtplib.SMTP_SSL(smtp_server, 465) as smtp:
+        smtp.login(smtp_user, smtp_pass)
         smtp.send_message(msg)
 
     return "Vielen Dank – die Daten wurden per E-Mail versendet."
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=10000)
